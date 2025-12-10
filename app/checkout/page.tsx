@@ -1,0 +1,239 @@
+'use client';
+
+import { useState, FormEvent } from 'react';
+import { useCart } from '@/context/CartContext';
+import { crearPedido, createPaymentPreference } from '@/lib/api/pedidos'; // Import new function
+import { useRouter } from 'next/navigation';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+
+export default function CheckoutPage() {
+  const router = useRouter();
+  const { cart, clearCart } = useCart();
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    cliente_nombre: '',
+    cliente_apellido: '',
+    cliente_email: '',
+    cliente_telefono: '',
+    direccion_entrega: '',
+    comuna: '',
+    notas: ''
+  });
+
+  const total = cart.reduce((sum, item) => sum + item.precio * item.cantidad, 0);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      // 1. Crear Pedido
+      const pedidoData = {
+        ...formData,
+        items: cart.map(item => ({
+          sku: item.sku,
+          cantidad: item.cantidad
+        }))
+      };
+
+      const confirmacion = await crearPedido(pedidoData);
+
+      // 2. Generar Preferencia de Pago
+      const payment = await createPaymentPreference(confirmacion.pedido_id);
+
+      // 3. Limpiar carrito y redirigir
+      clearCart();
+      window.location.href = payment.init_point; // Redirección a Mercado Pago
+
+    } catch (error: any) {
+      alert(error.message || 'Error al procesar el pedido');
+      console.error(error);
+      setLoading(false); // Solo desbloquear si falló
+    }
+  }
+
+  if (cart.length === 0) {
+    return (
+      <main className="min-h-screen bg-slate-900">
+        <Header />
+        <div className="container mx-auto px-4 py-20">
+          <div className="max-w-2xl mx-auto text-center">
+            <h1 className="text-4xl font-bold text-white mb-4">Carrito Vacío</h1>
+            <p className="text-gray-400 mb-8">No tienes productos en tu carrito</p>
+            <a
+              href="/#productos"
+              className="inline-block bg-primary hover:bg-primary-dark text-slate-900 font-semibold px-8 py-3 rounded-lg"
+            >
+              Ver Productos
+            </a>
+          </div>
+        </div>
+        <Footer />
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-900">
+      <Header />
+
+      <div className="container mx-auto px-4 py-20">
+        <h1 className="text-4xl font-bold text-white mb-8 text-center">Finalizar Pedido</h1>
+
+        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Formulario */}
+          <div className="bg-slate-800 rounded-lg p-6">
+            <h2 className="text-2xl font-bold text-white mb-6">Datos de Contacto</h2>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Nombre *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.cliente_nombre}
+                    onChange={(e) => setFormData({ ...formData, cliente_nombre: e.target.value })}
+                    className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:border-primary focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Apellido
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.cliente_apellido}
+                    onChange={(e) => setFormData({ ...formData, cliente_apellido: e.target.value })}
+                    className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:border-primary focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={formData.cliente_email}
+                  onChange={(e) => setFormData({ ...formData, cliente_email: e.target.value })}
+                  className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Teléfono *
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={formData.cliente_telefono}
+                  onChange={(e) => setFormData({ ...formData, cliente_telefono: e.target.value })}
+                  placeholder="+56 9 1234 5678"
+                  className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Dirección de Entrega *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.direccion_entrega}
+                  onChange={(e) => setFormData({ ...formData, direccion_entrega: e.target.value })}
+                  placeholder="Calle, Número, Depto/Casa"
+                  className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Comuna
+                </label>
+                <input
+                  type="text"
+                  value={formData.comuna}
+                  onChange={(e) => setFormData({ ...formData, comuna: e.target.value })}
+                  placeholder="Ej: Santiago Centro"
+                  className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Notas adicionales (opcional)
+                </label>
+                <textarea
+                  rows={3}
+                  value={formData.notas}
+                  onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
+                  placeholder="Instrucciones especiales, preferencia de horario, etc."
+                  className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-4 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+              >
+                {loading ? 'Redirigiendo a Mercado Pago...' : (
+                  <>
+                    Pagar con Mercado Pago
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+
+          {/* Resumen del pedido */}
+          <div>
+            <div className="bg-slate-800 rounded-lg p-6 sticky top-4">
+              <h2 className="text-2xl font-bold text-white mb-6">Resumen del Pedido</h2>
+
+              <div className="space-y-4 mb-6">
+                {cart.map((item) => (
+                  <div key={item.sku} className="flex justify-between items-center text-gray-300">
+                    <div>
+                      <p className="font-medium text-white">{item.nombre}</p>
+                      <p className="text-sm">
+                        {item.cantidad} × ${item.precio.toLocaleString('es-CL')}
+                      </p>
+                    </div>
+                    <p className="font-semibold text-primary">
+                      ${(item.precio * item.cantidad).toLocaleString('es-CL')}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-t border-slate-700 pt-4">
+                <div className="flex justify-between items-center text-2xl font-bold">
+                  <span className="text-white">Total</span>
+                  <span className="text-primary">${total.toLocaleString('es-CL')}</span>
+                </div>
+              </div>
+
+              <div className="mt-6 p-4 bg-slate-700 rounded-lg">
+                <p className="text-sm text-gray-300">
+                  ℹ️ Serás redirigido a Mercado Pago para completar tu compra de forma segura.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Footer />
+    </main>
+  );
+}

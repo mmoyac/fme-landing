@@ -1,0 +1,59 @@
+# =====================================
+# Dockerfile Producción - Frontend
+# Multi-stage build para optimización
+# =====================================
+
+# Stage 1: Build
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Build args para variables de entorno
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
+# Copiar package files
+COPY package*.json ./
+
+# Instalar TODAS las dependencias (incluye devDependencies necesarias para build)
+RUN npm ci
+
+# Copiar código fuente
+COPY . .
+
+# Build de Next.js para producción
+RUN npm run build
+
+# Stage 2: Runner
+FROM node:18-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1
+
+# Instalar sharp para optimización de imágenes
+RUN apk add --no-cache libc6-compat && \
+    npm install sharp
+
+# Crear usuario no-root
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Copiar archivos necesarios desde builder
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
+
+EXPOSE 3000
+
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3000', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+
+CMD ["node", "server.js"]

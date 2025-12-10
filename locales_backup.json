@@ -1,0 +1,29 @@
+﻿{
+    "value":  [
+                  {
+                      "nombre":  "Lampa",
+                      "codigo":  "LAMPA",
+                      "direccion":  "Barros Luco #1980, Lampa",
+                      "id":  1
+                  },
+                  {
+                      "nombre":  "TilTil",
+                      "codigo":  "TILTIL",
+                      "direccion":  "El Atajo 01 esquina Arturo Prat, Tiltil",
+                      "id":  2
+                  },
+                  {
+                      "nombre":  "boulevard",
+                      "codigo":  "BOULEVARD",
+                      "direccion":  "boulevard Santa Sara",
+                      "id":  3
+                  },
+                  {
+                      "nombre":  "Tienda Online",
+                      "codigo":  "WEB",
+                      "direccion":  "Comercio Electr??nico",
+                      "id":  4
+                  }
+              ],
+    "Count":  4
+}
