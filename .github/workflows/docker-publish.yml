@@ -10,6 +10,7 @@ on:
 env:
   DOCKER_IMAGE: mmoyac/masas-estacion-frontend
   NEXT_PUBLIC_API_URL: https://api.masasestacion.cl
+  NEXT_PUBLIC_MP_PUBLIC_KEY: APP_USR-e472ead8-cbc8-4046-b360-b1f418dcc899
 
 jobs:
   build-and-push:
@@ -45,7 +46,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            NEXT_PUBLIC_API_URL=${{ env.NEXT_PUBLIC_API_URL }}
+             NEXT_PUBLIC_API_URL=${{ env.NEXT_PUBLIC_API_URL }}
+             NEXT_PUBLIC_MP_PUBLIC_KEY=${{ env.NEXT_PUBLIC_MP_PUBLIC_KEY }}
           cache-from: type=registry,ref=${{ env.DOCKER_IMAGE }}:buildcache
           cache-to: type=registry,ref=${{ env.DOCKER_IMAGE }}:buildcache,mode=max
 
