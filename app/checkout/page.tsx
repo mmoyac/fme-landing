@@ -2,15 +2,17 @@
 
 import { useState, FormEvent } from 'react';
 import { useCart } from '@/context/CartContext';
-import { crearPedido, createPaymentPreference } from '@/lib/api/pedidos'; // Import new function
+import { crearPedido } from '@/lib/api/pedidos'; // Import new function
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import MercadoPagoBrick from '@/components/MercadoPagoBrick';
 
 export default function CheckoutPage() {
   const router = useRouter();
   const { cart, clearCart } = useCart();
   const [loading, setLoading] = useState(false);
+  const [confirmedOrderId, setConfirmedOrderId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     cliente_nombre: '',
     cliente_apellido: '',
@@ -38,20 +40,37 @@ export default function CheckoutPage() {
       };
 
       const confirmacion = await crearPedido(pedidoData);
-
-      // 2. Generar Preferencia de Pago
-      const payment = await createPaymentPreference(confirmacion.pedido_id);
-
-      // 3. Limpiar carrito y redirigir
-      clearCart();
-      window.location.href = payment.init_point; // Redirección a Mercado Pago
+      setConfirmedOrderId(confirmacion.pedido_id);
+      setLoading(false);
 
     } catch (error: any) {
       alert(error.message || 'Error al procesar el pedido');
       console.error(error);
-      setLoading(false); // Solo desbloquear si falló
+      setLoading(false);
     }
   }
+
+  const handlePaymentComplete = (result: any) => {
+    console.log("Pago completado:", result);
+    if (result.status === 'approved') {
+      clearCart();
+      router.push('/checkout/success');
+      // Opcional: pasar params del resultado
+    } else {
+      // Manejar otros estados (pending, rejected)
+      if (result.status === 'in_process' || result.status === 'pending') {
+        clearCart();
+        router.push('/checkout/pending');
+      } else {
+        alert('El pago no fue aprobado. Por favor intente nuevamente.');
+      }
+    }
+  };
+
+  const handlePaymentError = (error: any) => {
+    console.error("Error en pago:", error);
+    alert("Hubo un error al procesar el pago. Por favor revise sus datos.");
+  };
 
   if (cart.length === 0) {
     return (
@@ -186,13 +205,21 @@ export default function CheckoutPage() {
                 disabled={loading}
                 className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-4 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
               >
-                {loading ? 'Redirigiendo a Mercado Pago...' : (
-                  <>
-                    Pagar con Mercado Pago
-                  </>
-                )}
+                {loading ? 'Procesando...' : 'Confirmar Datos y Pagar'}
               </button>
             </form>
+
+            {confirmedOrderId && (
+              <div className="mt-8 pt-8 border-t border-slate-700">
+                <h3 className="text-xl font-bold text-white mb-4">Realizar Pago</h3>
+                <MercadoPagoBrick
+                  amount={total}
+                  externalReference={String(confirmedOrderId)}
+                  onPaymentComplete={handlePaymentComplete}
+                  onPaymentError={handlePaymentError}
+                />
+              </div>
+            )}
           </div>
 
           {/* Resumen del pedido */}

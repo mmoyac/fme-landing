@@ -57,3 +57,19 @@ export async function createPaymentPreference(pedidoId: number): Promise<Payment
 
   return response.json();
 }
+
+
+export async function processPayment(paymentData: any): Promise<any> {
+  const response = await fetch(`${API_URL}/api/payments/process_payment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(paymentData),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Error al procesar pago');
+  }
+
+  return response.json();
+}
