@@ -36,8 +36,8 @@ Las funciones de conexión y los *schemas* de datos deben estar centralizados en
 
 | Funcionalidad | Método | Endpoint (Backend) | Propósito en Landing |
 | :--- | :--- | :--- | :--- |
-| **Catálogo** | `GET` | `/api/productos/catalogo` | Listado de productos con precios y stock del local WEB. |
-| **Crear Pedido** | `POST` | `/api/pedidos/` | Crear pedido desde el checkout con datos del cliente. |
+| **Catálogo** | `GET` | `/api/productos/catalogo` | Listado de productos con precios, stock y puntos de fidelización del local WEB. |
+| **Crear Pedido** | `POST` | `/api/pedidos/` | Crear pedido desde el checkout con datos del cliente y cálculo de puntos. |
 
 **Nota:** El endpoint `/api/productos/catalogo` devuelve productos con precios del local WEB (codigo='WEB') y stock total agregado de todos los locales físicos.
 
@@ -173,13 +173,15 @@ NEXT_PUBLIC_API_URL=http://168.231.96.205:8001
 
 ---
 
-**Última Actualización:** 2025-11-25  
+**Última Actualización:** 2025-12-31  
 **Cambios Recientes:**
 - ✅ Despliegue en producción (VPS 168.231.96.205:3000)
 - ✅ Imagen Docker publicada en Docker Hub
-- ✅ Endpoint `/api/productos/catalogo` implementado
+- ✅ Endpoint `/api/productos/catalogo` implementado con información de categorías
 - ✅ Local WEB (codigo='WEB') configurado para precios
-- ✅ Catálogo mostrando 16 productos con precios y stock
+- ✅ Catálogo mostrando 16 productos con precios, stock e información de puntos
+- ✅ Sistema de Puntos de Fidelización integrado en catálogo y checkout
+- ✅ Carrito de compras con cálculo automático de puntos por categoría
 
 **Docker Hub:** `https://hub.docker.com/r/mmoyac/masas-estacion-frontend`  
 **Estado MVP:** ✅ **Desplegado y operativo en producción**

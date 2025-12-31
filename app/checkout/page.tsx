@@ -51,7 +51,9 @@ export default function CheckoutPage() {
   }
 
   const handlePaymentComplete = (result: any) => {
-    console.log("Pago completado:", result);
+    console.log("Pago completado (RAW):", result);
+    console.log("Status:", result.status);
+    console.log("Detail:", result.status_detail);
     if (result.status === 'approved') {
       clearCart();
       router.push('/checkout/success');

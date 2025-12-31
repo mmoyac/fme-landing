@@ -10,6 +10,9 @@ Landing page moderna y responsiva para el e-commerce de Masas Estación, constru
 - ⚡ **Server-Side Rendering** con Next.js 14
 - 🎨 **Tailwind CSS** para estilos modernos y personalizables
 - 🔄 **Integración API REST** con FastAPI backend
+- 🏆 **Sistema de Puntos** de fidelización integrado
+- 💰 **Cálculo de puntos** automático por categorías de productos
+- 🎯 **Checkout optimizado** con información de puntos ganados
 
 ## 🚀 Inicio Rápido
 
@@ -83,9 +86,9 @@ colors: {
 
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
-| `/api/productos/catalogo` | GET | Lista de productos con precios del local WEB |
+| `/api/productos/catalogo` | GET | Lista de productos con precios y puntos del local WEB |
+| `/api/pedidos/` | POST | Crear pedido con cálculo automático de puntos |
 | `/api/inventario/detalle/{sku}` | GET | Stock por local de un producto |
-| `/api/v1/leads/` | POST | Captura de leads (futuro) |
 
 ### Ejemplo de Consumo
 
@@ -125,12 +128,14 @@ const productos = await response.json()
 - Selector de cantidad integrado
 - Botón "Agregar al Carrito" con estados
 - Indicador de stock disponible
+- **Información de puntos de fidelización** por categoría
 - Cards con hover effects y bordes luminosos
 
 ### CartSidebar
 - Overlay con cierre al click fuera
 - Lista de items con controles
 - Subtotales por producto
+- **Cálculo automático de puntos ganados**
 - Total general destacado
 - Botón de checkout con gradiente
 - Animaciones suaves
@@ -169,7 +174,9 @@ services:
 
 ## 📝 Próximas Funcionalidades
 
-- [ ] Página de checkout con formulario de envío
+- [ ] Página de checkout con formulario de envío  
+- ✅ **Sistema de puntos** de fidelización implementado
+- ✅ **Checkout con cálculo de puntos** ganados por categoría
 - [ ] Modal de detalle de producto por local
 - [ ] Integración con sistema de leads
 - [ ] Galería de imágenes reales de productos
