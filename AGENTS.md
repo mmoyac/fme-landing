@@ -173,15 +173,19 @@ NEXT_PUBLIC_API_URL=http://168.231.96.205:8001
 
 ---
 
-**Última Actualización:** 2025-12-31  
+**Última Actualización:** 2026-01-02  
 **Cambios Recientes:**
-- ✅ Despliegue en producción (VPS 168.231.96.205:3000)
-- ✅ Imagen Docker publicada en Docker Hub
+- ✅ **Integración mejorada con sistema de caja** - pedidos se registran automáticamente
+- ✅ **Optimización de comunicación** con API mejorada para gestión de inventario
+- ✅ Sistema completo de Puntos de Fidelización integrado
 - ✅ Endpoint `/api/productos/catalogo` implementado con información de categorías
 - ✅ Local WEB (codigo='WEB') configurado para precios
 - ✅ Catálogo mostrando 16 productos con precios, stock e información de puntos
 - ✅ Sistema de Puntos de Fidelización integrado en catálogo y checkout
 - ✅ Carrito de compras con cálculo automático de puntos por categoría
+- ✅ Despliegue en producción (VPS 168.231.96.205:3000)
+- ✅ Imagen Docker publicada en Docker Hub
+- ✅ Configuración de producción optimizada
 
 **Docker Hub:** `https://hub.docker.com/r/mmoyac/masas-estacion-frontend`  
 **Estado MVP:** ✅ **Desplegado y operativo en producción**
