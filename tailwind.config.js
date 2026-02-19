@@ -9,14 +9,17 @@ module.exports = {
     extend: {
       colors: {
         primary: {
-          DEFAULT: 'rgb(94, 200, 242)', // Azul turquesa claro
-          light: 'rgb(144, 220, 255)',
-          dark: 'rgb(69, 162, 154)',
+          DEFAULT: 'var(--color-primario, rgb(94, 200, 242))',
+          light: 'var(--color-primario-light, rgb(144, 220, 255))',
+          dark: 'var(--color-primario-dark, rgb(69, 162, 154))',
         },
         secondary: {
-          DEFAULT: 'rgb(69, 162, 154)', // Verde azulado/teal
-          light: 'rgb(99, 192, 184)',
-          dark: 'rgb(49, 132, 124)',
+          DEFAULT: 'var(--color-secundario, rgb(69, 162, 154))',
+          light: 'var(--color-secundario-light, rgb(99, 192, 184))',
+          dark: 'var(--color-secundario-dark, rgb(49, 132, 124))',
+        },
+        accent: {
+          DEFAULT: 'var(--color-acento, rgb(218, 165, 32))',
         }
       },
     },

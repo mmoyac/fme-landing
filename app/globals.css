@@ -6,6 +6,17 @@
   --foreground-rgb: 255, 255, 255;
   --background-start-rgb: 15, 23, 42;
   --background-end-rgb: 30, 41, 59;
+  
+  /* Colores dinámicos del tenant (se inyectan desde TenantConfigContext) */
+  --color-primario: #5EC8F2;
+  --color-primario-light: #90DCFF;
+  --color-primario-dark: #45A29A;
+  --color-secundario: #45A29A;
+  --color-secundario-light: #63C0B8;
+  --color-secundario-dark: #31847C;
+  --fondo-hero-inicio: #0F172A;
+  --fondo-hero-fin: #1E293B;
+  --fondo-seccion: #1E293B;
 }
 
 body {

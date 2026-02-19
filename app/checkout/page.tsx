@@ -13,6 +13,8 @@ export default function CheckoutPage() {
   const { cart, clearCart } = useCart();
   const [loading, setLoading] = useState(false);
   const [confirmedOrderId, setConfirmedOrderId] = useState<number | null>(null);
+  const [numeroPedido, setNumeroPedido] = useState<string>('');
+  const [metodoPago, setMetodoPago] = useState<'mercadopago' | 'coordinado'>('mercadopago');
   const [formData, setFormData] = useState({
     cliente_nombre: '',
     cliente_apellido: '',
@@ -31,7 +33,7 @@ export default function CheckoutPage() {
 
     try {
       // 1. Crear Pedido
-      const pedidoData = {
+      const pedidoData: any = {
         ...formData,
         items: cart.map(item => ({
           sku: item.sku,
@@ -39,8 +41,24 @@ export default function CheckoutPage() {
         }))
       };
 
+      // Asignar medio de pago solo si eligió Mercado Pago
+      if (metodoPago === 'mercadopago') {
+        pedidoData.medio_pago_codigo = 'MERCADOPAGO';
+      }
+      // Si eligió coordinado, no enviar medio_pago_codigo (se asignará después)
+
       const confirmacion = await crearPedido(pedidoData);
       setConfirmedOrderId(confirmacion.pedido_id);
+      setNumeroPedido(confirmacion.numero_pedido);
+
+      // Si eligió pago coordinado (sin pasarela), redirigir directamente
+      if (metodoPago === 'coordinado') {
+        clearCart();
+        router.push(`/checkout/pending?pedido=${confirmacion.numero_pedido}&tipo=coordinado`);
+        return;
+      }
+
+      // Si eligió Mercado Pago, mostrar el brick
       setLoading(false);
 
     } catch (error: any) {
@@ -202,18 +220,69 @@ export default function CheckoutPage() {
                 />
               </div>
 
+              {/* Selector de método de pago */}
+              <div className="border-t border-slate-700 pt-6">
+                <label className="block text-lg font-semibold text-white mb-4">
+                  ¿Cómo deseas realizar el pago?
+                </label>
+                <div className="space-y-3">
+                  <label className="flex items-start p-4 border-2 border-slate-600 rounded-lg cursor-pointer hover:border-primary transition-colors bg-slate-700">
+                    <input
+                      type="radio"
+                      name="metodoPago"
+                      value="mercadopago"
+                      checked={metodoPago === 'mercadopago'}
+                      onChange={(e) => setMetodoPago(e.target.value as 'mercadopago')}
+                      className="mt-1 mr-3 text-primary focus:ring-primary"
+                    />
+                    <div className="flex-1">
+                      <div className="font-semibold text-white flex items-center gap-2">
+                        💳 Pagar ahora con Mercado Pago
+                        <span className="text-xs bg-green-600 text-white px-2 py-1 rounded">Recomendado</span>
+                      </div>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Paga de forma segura con tarjetas de crédito/débito. Tu pedido quedará confirmado y pagado.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start p-4 border-2 border-slate-600 rounded-lg cursor-pointer hover:border-primary transition-colors bg-slate-700">
+                    <input
+                      type="radio"
+                      name="metodoPago"
+                      value="coordinado"
+                      checked={metodoPago === 'coordinado'}
+                      onChange={(e) => setMetodoPago(e.target.value as 'coordinado')}
+                      className="mt-1 mr-3 text-primary focus:ring-primary"
+                    />
+                    <div className="flex-1">
+                      <div className="font-semibold text-white">
+                        📞 Solicitar pedido sin pagar ahora
+                      </div>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Recibirás tu número de pedido y te contactaremos para coordinar pago y entrega.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
               <button
                 type="submit"
                 disabled={loading}
                 className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-4 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
               >
-                {loading ? 'Procesando...' : 'Confirmar Datos y Pagar'}
+                {loading ? 'Procesando...' : metodoPago === 'mercadopago' ? 'Confirmar y Pagar' : 'Enviar Pedido'}
               </button>
             </form>
 
-            {confirmedOrderId && (
+            {confirmedOrderId && metodoPago === 'mercadopago' && (
               <div className="mt-8 pt-8 border-t border-slate-700">
                 <h3 className="text-xl font-bold text-white mb-4">Realizar Pago</h3>
+                <p className="text-gray-400 mb-4">
+                  Pedido <span className="font-semibold text-primary">#{numeroPedido}</span> creado exitosamente.
+                  Completa el pago para confirmar tu pedido.
+                </p>
                 <MercadoPagoBrick
                   amount={total}
                   externalReference={String(confirmedOrderId)}
@@ -254,7 +323,9 @@ export default function CheckoutPage() {
 
               <div className="mt-6 p-4 bg-slate-700 rounded-lg">
                 <p className="text-sm text-gray-300">
-                  ℹ️ Serás redirigido a Mercado Pago para completar tu compra de forma segura.
+                  {metodoPago === 'mercadopago' 
+                    ? '💳 Podrás pagar de forma segura con Mercado Pago después de confirmar tus datos.'
+                    : '📞 Recibirás un número de pedido y te contactaremos para coordinar pago y entrega.'}
                 </p>
               </div>
             </div>

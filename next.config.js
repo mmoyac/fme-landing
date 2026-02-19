@@ -13,6 +13,10 @@ const nextConfig = {
         protocol: 'http',
         hostname: 'localhost',
       },
+      {
+        protocol: 'http',
+        hostname: '168.231.96.205', // VPS backend
+      },
     ],
   },
   // Habilitar standalone para Docker

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useCart } from '@/context/CartContext'
+import { useTenantConfig } from '@/context/TenantConfigContext'
 
 interface Producto {
   sku: string
@@ -17,13 +18,24 @@ export default function ProductCatalog() {
   const [loading, setLoading] = useState(true)
   const [cantidad, setCantidad] = useState<Record<string, number>>({})
   const { addToCart } = useCart()
+  const { config } = useTenantConfig()
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
   useEffect(() => {
-    fetch(`${API_URL}/api/productos/catalogo`)
+    const currentHostname = window.location.hostname
+    
+    console.log('🛒 Cargando productos desde:', `${API_URL}/api/productos/catalogo`)
+    console.log('🌐 Dominio actual:', currentHostname)
+    
+    fetch(`${API_URL}/api/productos/catalogo`, {
+      headers: {
+        'X-Forwarded-Host': currentHostname
+      }
+    })
       .then(res => res.json())
       .then(data => {
+        console.log(`✅ Productos cargados: ${data.length}`)
         setProductos(data)
         // Inicializar cantidades en 1
         const initialQty: Record<string, number> = {}
@@ -89,7 +101,7 @@ export default function ProductCatalog() {
               <div className="h-48 bg-gradient-to-br from-primary/30 to-secondary/30 relative">
                 {producto.imagen_url ? (
                   <img
-                    src={`${API_URL}${producto.imagen_url}`}
+                    src={`${API_URL}${producto.imagen_url}?t=${Date.now()}`}
                     alt={producto.nombre}
                     className="w-full h-full object-cover"
                   />
@@ -108,56 +120,70 @@ export default function ProductCatalog() {
                 </h3>
                 <p className="text-sm text-gray-400 mb-3">SKU: {producto.sku}</p>
 
-                {/* Stock Info */}
-                <div className="mb-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400">Stock disponible:</span>
-                    <span className={`font-semibold ${producto.stock_total > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {producto.stock_total} unidades
-                    </span>
+                {/* Stock Info - solo si displaySettings.mostrar_stock */}
+                {config?.displaySettings?.mostrar_stock && (
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-400">Stock disponible:</span>
+                      <span className={`font-semibold ${producto.stock_total > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {producto.stock_total} unidades
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* Price */}
-                <p className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary mb-4">
-                  ${producto.precio.toLocaleString('es-CL')}
-                </p>
+                {/* Price - solo si displaySettings.mostrar_precios */}
+                {config?.displaySettings?.mostrar_precios && (
+                  <p className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary mb-4">
+                    ${producto.precio.toLocaleString('es-CL')}
+                  </p>
+                )}
 
-                {/* Quantity Selector */}
-                <div className="flex items-center gap-3 mb-4">
-                  <button
-                    onClick={() => updateCantidad(producto.sku, (cantidad[producto.sku] || 1) - 1)}
-                    className="w-10 h-10 flex items-center justify-center bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition"
-                  >
-                    -
-                  </button>
-                  <input
-                    type="number"
-                    value={cantidad[producto.sku] || 1}
-                    onChange={(e) => updateCantidad(producto.sku, parseInt(e.target.value) || 1)}
-                    className="w-16 text-center bg-slate-700 border border-primary/30 text-white rounded-lg py-2 font-semibold"
-                    min="1"
-                  />
-                  <button
-                    onClick={() => updateCantidad(producto.sku, (cantidad[producto.sku] || 1) + 1)}
-                    className="w-10 h-10 flex items-center justify-center bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition"
-                  >
-                    +
-                  </button>
-                </div>
+                {/* Quantity Selector y Cart Button - solo si displaySettings.habilitar_carrito */}
+                {config?.displaySettings?.habilitar_carrito ? (
+                  <>
+                    {/* Quantity Selector */}
+                    <div className="flex items-center gap-3 mb-4">
+                      <button
+                        onClick={() => updateCantidad(producto.sku, (cantidad[producto.sku] || 1) - 1)}
+                        className="w-10 h-10 flex items-center justify-center bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        value={cantidad[producto.sku] || 1}
+                        onChange={(e) => updateCantidad(producto.sku, parseInt(e.target.value) || 1)}
+                        className="w-16 text-center bg-slate-700 border border-primary/30 text-white rounded-lg py-2 font-semibold"
+                        min="1"
+                      />
+                      <button
+                        onClick={() => updateCantidad(producto.sku, (cantidad[producto.sku] || 1) + 1)}
+                        className="w-10 h-10 flex items-center justify-center bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition"
+                      >
+                        +
+                      </button>
+                    </div>
 
-                {/* Add to Cart Button */}
-                <button
-                  onClick={() => handleAddToCart(producto)}
-                  disabled={producto.stock_total === 0}
-                  className={`w-full py-3 rounded-lg font-bold transition ${
-                    producto.stock_total > 0
-                      ? 'bg-gradient-to-r from-primary to-secondary hover:from-primary-light hover:to-primary text-white shadow-lg shadow-primary/30'
-                      : 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  {producto.stock_total > 0 ? 'Agregar al Carrito' : 'Sin Stock'}
-                </button>
+                    {/* Add to Cart Button */}
+                    <button
+                      onClick={() => handleAddToCart(producto)}
+                      disabled={producto.stock_total === 0}
+                      className={`w-full py-3 rounded-lg font-bold transition ${
+                        producto.stock_total > 0
+                          ? 'bg-gradient-to-r from-primary to-secondary hover:from-primary-light hover:to-primary text-white shadow-lg shadow-primary/30'
+                          : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {producto.stock_total > 0 ? 'Agregar al Carrito' : 'Sin Stock'}
+                    </button>
+                  </>
+                ) : (
+                  /* Modo catálogo - sin opción de compra */
+                  <div className="text-center py-3 bg-slate-700 rounded-lg">
+                    <span className="text-gray-400 text-sm">Solo catálogo</span>
+                  </div>
+                )}
               </div>
             </div>
           ))}

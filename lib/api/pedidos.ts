@@ -25,9 +25,15 @@ export interface PedidoConfirmacion {
 }
 
 export async function crearPedido(data: PedidoCreate): Promise<PedidoConfirmacion> {
+  // Obtener el hostname actual del frontend para detección de tenant
+  const frontendHost = typeof window !== 'undefined' ? window.location.host : 'localhost';
+  
   const response = await fetch(`${API_URL}/api/pedidos/`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'X-Forwarded-Host': frontendHost  // Enviar hostname del frontend para detección de tenant
+    },
     body: JSON.stringify(data),
   });
 

@@ -1,0 +1,19 @@
+# Testing Multi-Tenant Local
+# Agregar estas líneas a: C:\Windows\System32\drivers\etc\hosts
+# Requiere permisos de administrador
+
+127.0.0.1 masasestacion.local
+127.0.0.1 elolivo.local
+127.0.0.1 api.masasestacion.local
+127.0.0.1 admin.masasestacion.local
+
+# Instrucciones:
+# 1. Abrir PowerShell como Administrador
+# 2. Ejecutar: notepad C:\Windows\System32\drivers\etc\hosts
+# 3. Agregar las líneas de arriba al final del archivo
+# 4. Guardar y cerrar
+
+# Probar en el navegador:
+# http://masasestacion.local:3000  → Landing Masas Estación
+# http://elolivo.local:3000        → Landing El Olivo
+# http://localhost:3000            → Landing Masas Estación (fallback)
