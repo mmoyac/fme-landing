@@ -39,6 +39,17 @@ export async function crearPedido(data: PedidoCreate): Promise<PedidoConfirmacio
 
   if (!response.ok) {
     const error = await response.json();
+    
+    // Manejar errores de validación de Pydantic (422)
+    if (Array.isArray(error.detail)) {
+      const messages = error.detail.map((err: any) => {
+        const field = err.loc[err.loc.length - 1]; // Último elemento del loc es el campo
+        return `${field}: ${err.msg}`;
+      }).join('\n');
+      throw new Error(messages);
+    }
+    
+    // Manejar otros errores (string simple)
     throw new Error(error.detail || 'Error al crear pedido');
   }
 
