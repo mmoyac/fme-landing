@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useTenantConfig } from '@/context/TenantConfigContext'
 
 export default function Footer() {
@@ -58,6 +59,11 @@ export default function Footer() {
                 <a href="#contacto" className="text-gray-400 hover:text-white transition">
                   Contacto
                 </a>
+              </li>
+              <li>
+                <Link href="/politica-devoluciones" className="text-gray-400 hover:text-white transition">
+                  Política de Devoluciones
+                </Link>
               </li>
             </ul>
           </div>
