@@ -13,6 +13,7 @@ export const metadata: Metadata = {
   description: 'Fideos, Ñoquis y Tapas de Empanadas. Directo de fábrica.',
   other: {
     'facebook-domain-verification': '6yarf3qll54gcj8jrwrs5dj1sc2h7y',
+    'google-site-verification': 'ZZC5JftoF_TF1ATV2OqhS1lskha3JWC-OSDe2Vo6rG0',
   },
 }
 
