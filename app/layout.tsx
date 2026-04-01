@@ -11,6 +11,9 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'Masas Estación - Las mejores masas frescas a tu mesa',
   description: 'Fideos, Ñoquis y Tapas de Empanadas. Directo de fábrica.',
+  other: {
+    'facebook-domain-verification': '6yarf3qll54gcj8jrwrs5dj1sc2h7y',
+  },
 }
 
 export default function RootLayout({
