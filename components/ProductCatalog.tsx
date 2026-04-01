@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useCart } from '@/context/CartContext'
 import { useTenantConfig } from '@/context/TenantConfigContext'
 
@@ -98,12 +99,12 @@ export default function ProductCatalog() {
               className="bg-slate-800 rounded-lg border border-primary/30 hover:border-primary hover:shadow-xl hover:shadow-primary/20 transition-all duration-200 overflow-hidden"
             >
               {/* Product Image */}
-              <div className="h-48 bg-gradient-to-br from-primary/30 to-secondary/30 relative">
+              <Link href={`/producto/${encodeURIComponent(producto.sku)}`} className="block h-48 bg-gradient-to-br from-primary/30 to-secondary/30 relative group">
                 {producto.imagen_url ? (
                   <img
                     src={`${API_URL}${producto.imagen_url}?t=${Date.now()}`}
                     alt={producto.nombre}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
@@ -112,12 +113,14 @@ export default function ProductCatalog() {
                     </svg>
                   </div>
                 )}
-              </div>
+              </Link>
 
               <div className="p-4">
-                <h3 className="text-lg font-bold text-white mb-1">
-                  {producto.nombre}
-                </h3>
+                <Link href={`/producto/${encodeURIComponent(producto.sku)}`}>
+                  <h3 className="text-lg font-bold text-white mb-1 hover:text-primary transition">
+                    {producto.nombre}
+                  </h3>
+                </Link>
                 <p className="text-sm text-gray-400 mb-3">SKU: {producto.sku}</p>
 
                 {/* Stock Info - solo si displaySettings.mostrar_stock */}
