@@ -118,6 +118,7 @@ export async function GET(request: NextRequest) {
       }
       <g:price>${priceLabel}</g:price>
       <g:availability>${availability}</g:availability>
+      <g:quantity>${Math.max(0, Math.floor(p.stock_total))}</g:quantity>
       <g:condition>new</g:condition>
       <g:brand>${escapeXml(shopName)}</g:brand>
     </item>`
