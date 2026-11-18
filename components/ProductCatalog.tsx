@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useCart } from '@/context/CartContext'
 import { useTenantConfig } from '@/context/TenantConfigContext'
+import { esModuloNoContratado, MENSAJE_TIENDA_NO_DISPONIBLE } from '@/lib/api/modulos'
 
 interface Producto {
   sku: string
@@ -18,6 +19,7 @@ export default function ProductCatalog() {
   const [productos, setProductos] = useState<Producto[]>([])
   const [loading, setLoading] = useState(true)
   const [cantidad, setCantidad] = useState<Record<string, number>>({})
+  const [tiendaNoDisponible, setTiendaNoDisponible] = useState(false)
   const { addToCart } = useCart()
   const { config } = useTenantConfig()
 
@@ -34,8 +36,17 @@ export default function ProductCatalog() {
         'X-Forwarded-Host': currentHostname
       }
     })
-      .then(res => res.json())
+      .then(async res => {
+        const data = await res.json()
+        if (esModuloNoContratado(res.status, data)) {
+          setTiendaNoDisponible(true)
+          return null
+        }
+        if (!res.ok || !Array.isArray(data)) throw new Error(`HTTP ${res.status}`)
+        return data
+      })
       .then(data => {
+        if (!data) return
         console.log(`✅ Productos cargados: ${data.length}`)
         setProductos(data)
         // Inicializar cantidades en 1
@@ -66,6 +77,20 @@ export default function ProductCatalog() {
   const updateCantidad = (sku: string, value: number) => {
     if (value < 1) return
     setCantidad(prev => ({ ...prev, [sku]: value }))
+  }
+
+  if (tiendaNoDisponible) {
+    return (
+      <section id="productos" className="py-16 bg-slate-900">
+        <div className="container mx-auto px-4">
+          <div className="max-w-xl mx-auto text-center bg-slate-800 border border-slate-700 rounded-xl p-8">
+            <div className="text-4xl mb-3">🛍️</div>
+            <h2 className="text-xl font-semibold text-white mb-2">Tienda no disponible</h2>
+            <p className="text-gray-400">{MENSAJE_TIENDA_NO_DISPONIBLE}</p>
+          </div>
+        </div>
+      </section>
+    )
   }
 
   if (loading) {

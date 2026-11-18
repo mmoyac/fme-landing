@@ -1,21 +1,32 @@
 'use client';
 // Rebuild: 2026-02-23 - Fix Server Actions cache
 
-import { useState, FormEvent } from 'react';
+import { useEffect, useState, FormEvent } from 'react';
 import { useCart } from '@/context/CartContext';
-import { crearPedido } from '@/lib/api/pedidos'; // Import new function
+import {
+  crearPedido, validarEmail, ValidacionEmail, tokenGuardado, enviarCodigoEmail, confirmarCodigoEmail,
+} from '@/lib/api/pedidos';
+import { obtenerPasarelas, iniciarPago, redirigirAPasarela, PasarelaDisponible } from '@/lib/api/pagos';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import MercadoPagoBrick from '@/components/MercadoPagoBrick';
+
+const ICONO_PROVEEDOR: Record<string, string> = { MERCADOPAGO: '💳', FLOW: '💳', KHIPU: '🏦', SIMULADA: '🧪' };
+const DETALLE_PROVEEDOR: Record<string, string> = {
+  MERCADOPAGO: 'Tarjetas de crédito, débito y saldo Mercado Pago.',
+  FLOW: 'Webpay, tarjetas y otros medios a través de Flow.',
+  KHIPU: 'Transferencia bancaria simplificada.',
+  SIMULADA: 'Pasarela de prueba (solo desarrollo).',
+};
 
 export default function CheckoutPage() {
   const router = useRouter();
   const { cart, clearCart } = useCart();
   const [loading, setLoading] = useState(false);
-  const [confirmedOrderId, setConfirmedOrderId] = useState<number | null>(null);
-  const [numeroPedido, setNumeroPedido] = useState<string>('');
-  const [metodoPago, setMetodoPago] = useState<'mercadopago' | 'coordinado'>('mercadopago');
+  const [error, setError] = useState<string | null>(null);
+  const [pasarelas, setPasarelas] = useState<PasarelaDisponible[]>([]);
+  // id de la pasarela elegida, o 'coordinado' (pedido sin pago en línea)
+  const [metodoPago, setMetodoPago] = useState<number | 'coordinado'>('coordinado');
   const [formData, setFormData] = useState({
     cliente_nombre: '',
     cliente_apellido: '',
@@ -26,72 +37,144 @@ export default function CheckoutPage() {
     notas: ''
   });
 
-  const total = cart.reduce((sum, item) => sum + item.precio * item.cantidad, 0);
+  // Validación del correo (formato, dominio que recibe correo y sugerencia de typo)
+  const [chequeoEmail, setChequeoEmail] = useState<ValidacionEmail | null>(null);
+  const [validandoEmail, setValidandoEmail] = useState(false);
+  const [sugerenciaDescartada, setSugerenciaDescartada] = useState(false);
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setLoading(true);
+  // Verificación con código por correo (el backend exige el token para crear el pedido)
+  const [emailToken, setEmailToken] = useState<string | null>(null);
+  const [codigoEnviado, setCodigoEnviado] = useState(false);
+  const [codigo, setCodigo] = useState('');
+  const [enviandoCodigo, setEnviandoCodigo] = useState(false);
+  const [verificandoCodigo, setVerificandoCodigo] = useState(false);
+  const [errorCodigo, setErrorCodigo] = useState<string | null>(null);
+  const [reenviarEn, setReenviarEn] = useState(0);
 
+  useEffect(() => {
+    if (reenviarEn <= 0) return;
+    const t = setTimeout(() => setReenviarEn(s => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [reenviarEn]);
+
+  function reiniciarVerificacion(email: string) {
+    setEmailToken(email ? tokenGuardado(email) : null);   // ya verificado antes en este navegador
+    setCodigoEnviado(false);
+    setCodigo('');
+    setErrorCodigo(null);
+  }
+
+  async function pedirCodigo() {
+    setErrorCodigo(null);
+    setEnviandoCodigo(true);
     try {
-      // 1. Crear Pedido
-      const pedidoData: any = {
-        ...formData,
-        items: cart.map(item => ({
-          sku: item.sku,
-          cantidad: item.cantidad
-        }))
-      };
-
-      // Asignar medio de pago solo si eligió Mercado Pago
-      if (metodoPago === 'mercadopago') {
-        pedidoData.medio_pago_codigo = 'MERCADOPAGO';
-      }
-      // Si eligió coordinado, no enviar medio_pago_codigo (se asignará después)
-
-      const confirmacion = await crearPedido(pedidoData);
-      setConfirmedOrderId(confirmacion.pedido_id);
-      setNumeroPedido(confirmacion.numero_pedido);
-
-      // Si eligió pago coordinado (sin pasarela), redirigir directamente
-      if (metodoPago === 'coordinado') {
-        clearCart();
-        router.push(`/checkout/pending?pedido=${confirmacion.numero_pedido}&tipo=coordinado`);
-        return;
-      }
-
-      // Si eligió Mercado Pago, mostrar el brick
-      setLoading(false);
-
-    } catch (error: any) {
-      alert(error.message || 'Error al procesar el pedido');
-      console.error(error);
-      setLoading(false);
+      const r = await enviarCodigoEmail(formData.cliente_email);
+      setCodigoEnviado(true);
+      setReenviarEn(r.reenviar_en || 60);
+    } catch (e: any) {
+      setErrorCodigo(e.message);
+    } finally {
+      setEnviandoCodigo(false);
     }
   }
 
-  const handlePaymentComplete = (result: any) => {
-    console.log("Pago completado (RAW):", result);
-    console.log("Status:", result.status);
-    console.log("Detail:", result.status_detail);
-    if (result.status === 'approved') {
-      clearCart();
-      router.push('/checkout/success');
-      // Opcional: pasar params del resultado
-    } else {
-      // Manejar otros estados (pending, rejected)
-      if (result.status === 'in_process' || result.status === 'pending') {
-        clearCart();
-        router.push('/checkout/pending');
-      } else {
-        alert('El pago no fue aprobado. Por favor intente nuevamente.');
-      }
+  async function verificarCodigo() {
+    setErrorCodigo(null);
+    setVerificandoCodigo(true);
+    try {
+      setEmailToken(await confirmarCodigoEmail(formData.cliente_email, codigo));
+      setCodigoEnviado(false);
+    } catch (e: any) {
+      setErrorCodigo(e.message);
+    } finally {
+      setVerificandoCodigo(false);
     }
-  };
+  }
 
-  const handlePaymentError = (error: any) => {
-    console.error("Error en pago:", error);
-    alert("Hubo un error al procesar el pago. Por favor revise sus datos.");
-  };
+  async function revisarEmail(email: string): Promise<ValidacionEmail | null> {
+    if (!email.trim()) { setChequeoEmail(null); return null; }
+    setValidandoEmail(true);
+    const r = await validarEmail(email.trim());
+    setValidandoEmail(false);
+    setChequeoEmail(r);
+    setSugerenciaDescartada(false);
+    if (r?.valido && r.email !== formData.cliente_email) {
+      setFormData(f => ({ ...f, cliente_email: r.email }));   // normalizado (dominio en minúsculas)
+    }
+    reiniciarVerificacion(r?.valido ? r.email : '');
+    return r;
+  }
+
+  const total = cart.reduce((sum, item) => sum + item.precio * item.cantidad, 0);
+  const pasarelaElegida = pasarelas.find(p => p.id === metodoPago);
+
+  useEffect(() => {
+    obtenerPasarelas().then(lista => {
+      setPasarelas(lista);
+      if (lista.length > 0) setMetodoPago(lista[0].id);
+    });
+  }, []);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    // El correo debe estar verificado; si hay una sugerencia de corrección sin responder, se pide responderla primero.
+    const chequeo = chequeoEmail ?? await revisarEmail(formData.cliente_email);
+    if (chequeo && !chequeo.valido) {
+      setError(chequeo.error || 'Revisa tu correo electrónico');
+      return;
+    }
+    if (chequeo?.sugerencia && !sugerenciaDescartada) {
+      setError(`Revisa tu correo: ¿quisiste decir ${chequeo.sugerencia}? Corrígelo o confirma que está bien.`);
+      return;
+    }
+    const token = emailToken || tokenGuardado(formData.cliente_email);
+    if (!token) {
+      setError('Verifica tu correo con el código que te enviamos antes de confirmar el pedido.');
+      return;
+    }
+    if (pasarelaElegida?.monto_minimo && total < pasarelaElegida.monto_minimo) {
+      setError(`El monto mínimo para pagar con ${pasarelaElegida.nombre_visible} es $${pasarelaElegida.monto_minimo.toLocaleString('es-CL')}`);
+      return;
+    }
+    setLoading(true);
+
+    let confirmacion;
+    try {
+      confirmacion = await crearPedido({
+        ...formData,
+        email_token: token,
+        items: cart.map(item => ({ sku: item.sku, cantidad: item.cantidad })),
+      });
+    } catch (err: any) {
+      setError(err.message || 'Error al procesar el pedido');
+      setLoading(false);
+      return;
+    }
+
+    if (!pasarelaElegida || !confirmacion.token_seguimiento) {
+      clearCart();
+      router.push(`/checkout/pending?pedido=${confirmacion.numero_pedido}&tipo=coordinado`);
+      return;
+    }
+
+    try {
+      // El monto lo fija el backend desde el pedido; aquí solo se elige la pasarela.
+      const redireccion = await iniciarPago({
+        pedido_id: confirmacion.pedido_id,
+        token_seguimiento: confirmacion.token_seguimiento,
+        pasarela_id: pasarelaElegida.id,
+        email: formData.cliente_email || undefined,
+      });
+      clearCart();
+      redirigirAPasarela(redireccion);
+    } catch (err: any) {
+      // El pedido ya quedó creado: no se pierde, se coordina el pago.
+      clearCart();
+      alert(`Tu pedido ${confirmacion.numero_pedido} quedó registrado, pero no se pudo iniciar el pago: ${err.message}. Te contactaremos para coordinar el pago.`);
+      router.push(`/checkout/pending?pedido=${confirmacion.numero_pedido}&tipo=coordinado`);
+    }
+  }
 
   if (cart.length === 0) {
     return (
@@ -161,10 +244,110 @@ export default function CheckoutPage() {
                 <input
                   type="email"
                   required
+                  autoComplete="email"
                   value={formData.cliente_email}
-                  onChange={(e) => setFormData({ ...formData, cliente_email: e.target.value })}
-                  className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:border-primary focus:outline-none"
+                  onChange={(e) => {
+                    setFormData({ ...formData, cliente_email: e.target.value });
+                    setChequeoEmail(null);
+                    setSugerenciaDescartada(false);
+                    reiniciarVerificacion('');
+                  }}
+                  onBlur={() => revisarEmail(formData.cliente_email)}
+                  className={`w-full bg-slate-700 text-white px-4 py-2 rounded-lg border focus:outline-none ${
+                    chequeoEmail && !chequeoEmail.valido ? 'border-red-500 focus:border-red-400' : 'border-slate-600 focus:border-primary'
+                  }`}
                 />
+                {validandoEmail && <p className="text-xs text-gray-400 mt-1">Verificando correo...</p>}
+                {chequeoEmail && !chequeoEmail.valido && (
+                  <p className="text-sm text-red-400 mt-1">{chequeoEmail.error}</p>
+                )}
+                {chequeoEmail?.sugerencia && !sugerenciaDescartada && (
+                  <div className="mt-2 p-3 rounded-lg bg-amber-900/40 border border-amber-600 text-sm text-amber-100">
+                    ¿Quisiste decir <strong>{chequeoEmail.sugerencia}</strong>?
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const s = chequeoEmail.sugerencia!;
+                          setFormData(f => ({ ...f, cliente_email: s }));
+                          revisarEmail(s);
+                        }}
+                        className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold px-3 py-1 rounded"
+                      >
+                        Sí, corregir
+                      </button>
+                      {chequeoEmail.valido && (
+                        <button
+                          type="button"
+                          onClick={() => setSugerenciaDescartada(true)}
+                          className="bg-slate-600 hover:bg-slate-500 text-white px-3 py-1 rounded"
+                        >
+                          No, mi correo está bien
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {/* Verificación con código: solo con un correo válido y sin sugerencia pendiente */}
+                {chequeoEmail?.valido && (!chequeoEmail.sugerencia || sugerenciaDescartada) && (
+                  emailToken ? (
+                    <p className="text-sm text-green-400 mt-2">✓ Correo verificado</p>
+                  ) : (
+                    <div className="mt-3 p-4 rounded-lg bg-slate-700/60 border border-slate-600">
+                      {!codigoEnviado ? (
+                        <>
+                          <p className="text-sm text-gray-300 mb-3">
+                            Para asegurarnos de que recibas la confirmación y el seguimiento, te enviaremos un código a tu correo.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={pedirCodigo}
+                            disabled={enviandoCodigo}
+                            className="bg-primary hover:bg-primary-dark text-slate-900 font-semibold px-4 py-2 rounded-lg disabled:opacity-50"
+                          >
+                            {enviandoCodigo ? 'Enviando...' : 'Enviar código de verificación'}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm text-gray-300 mb-3">
+                            Ingresa el código de 6 dígitos que enviamos a <strong>{formData.cliente_email}</strong>.
+                            Revisa también la carpeta de spam.
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              autoComplete="one-time-code"
+                              maxLength={6}
+                              value={codigo}
+                              onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                              placeholder="000000"
+                              className="w-32 bg-slate-800 text-white text-center tracking-[0.4em] text-lg px-3 py-2 rounded-lg border border-slate-500 focus:border-primary focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={verificarCodigo}
+                              disabled={codigo.length !== 6 || verificandoCodigo}
+                              className="bg-primary hover:bg-primary-dark text-slate-900 font-semibold px-4 py-2 rounded-lg disabled:opacity-50"
+                            >
+                              {verificandoCodigo ? 'Verificando...' : 'Verificar'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={pedirCodigo}
+                              disabled={reenviarEn > 0 || enviandoCodigo}
+                              className="text-sm text-gray-300 hover:text-white underline disabled:no-underline disabled:opacity-50 px-2"
+                            >
+                              {reenviarEn > 0 ? `Reenviar en ${reenviarEn}s` : 'Reenviar código'}
+                            </button>
+                          </div>
+                        </>
+                      )}
+                      {errorCodigo && <p className="text-sm text-red-400 mt-2">{errorCodigo}</p>}
+                    </div>
+                  )
+                )}
               </div>
 
               <div>
@@ -227,25 +410,30 @@ export default function CheckoutPage() {
                   ¿Cómo deseas realizar el pago?
                 </label>
                 <div className="space-y-3">
-                  <label className="flex items-start p-4 border-2 border-slate-600 rounded-lg cursor-pointer hover:border-primary transition-colors bg-slate-700">
-                    <input
-                      type="radio"
-                      name="metodoPago"
-                      value="mercadopago"
-                      checked={metodoPago === 'mercadopago'}
-                      onChange={(e) => setMetodoPago(e.target.value as 'mercadopago')}
-                      className="mt-1 mr-3 text-primary focus:ring-primary"
-                    />
-                    <div className="flex-1">
-                      <div className="font-semibold text-white flex items-center gap-2">
-                        💳 Pagar ahora con Mercado Pago
-                        <span className="text-xs bg-green-600 text-white px-2 py-1 rounded">Recomendado</span>
+                  {pasarelas.map((p, i) => (
+                    <label key={p.id} className="flex items-start p-4 border-2 border-slate-600 rounded-lg cursor-pointer hover:border-primary transition-colors bg-slate-700">
+                      <input
+                        type="radio"
+                        name="metodoPago"
+                        value={p.id}
+                        checked={metodoPago === p.id}
+                        onChange={() => setMetodoPago(p.id)}
+                        className="mt-1 mr-3 text-primary focus:ring-primary"
+                      />
+                      <div className="flex-1">
+                        <div className="font-semibold text-white flex items-center gap-2">
+                          {ICONO_PROVEEDOR[p.proveedor] || '💳'} Pagar ahora con {p.nombre_visible}
+                          {i === 0 && <span className="text-xs bg-green-600 text-white px-2 py-1 rounded">Recomendado</span>}
+                        </div>
+                        <p className="text-sm text-gray-400 mt-1">
+                          {DETALLE_PROVEEDOR[p.proveedor] || 'Pago en línea seguro.'} Serás redirigido para completar el pago.
+                        </p>
+                        {p.monto_minimo && total < p.monto_minimo && (
+                          <p className="text-xs text-amber-400 mt-1">Monto mínimo ${p.monto_minimo.toLocaleString('es-CL')}</p>
+                        )}
                       </div>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Paga de forma segura con tarjetas de crédito/débito. Tu pedido quedará confirmado y pagado.
-                      </p>
-                    </div>
-                  </label>
+                    </label>
+                  ))}
 
                   <label className="flex items-start p-4 border-2 border-slate-600 rounded-lg cursor-pointer hover:border-primary transition-colors bg-slate-700">
                     <input
@@ -253,7 +441,7 @@ export default function CheckoutPage() {
                       name="metodoPago"
                       value="coordinado"
                       checked={metodoPago === 'coordinado'}
-                      onChange={(e) => setMetodoPago(e.target.value as 'coordinado')}
+                      onChange={() => setMetodoPago('coordinado')}
                       className="mt-1 mr-3 text-primary focus:ring-primary"
                     />
                     <div className="flex-1">
@@ -268,30 +456,20 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
+              {error && (
+                <div className="p-4 rounded-lg bg-red-900/40 border border-red-700 text-red-200 text-sm whitespace-pre-line">
+                  {error}
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={loading}
                 className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-4 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
               >
-                {loading ? 'Procesando...' : metodoPago === 'mercadopago' ? 'Confirmar y Pagar' : 'Enviar Pedido'}
+                {loading ? 'Procesando...' : pasarelaElegida ? `Confirmar y pagar con ${pasarelaElegida.nombre_visible}` : 'Enviar Pedido'}
               </button>
             </form>
-
-            {confirmedOrderId && metodoPago === 'mercadopago' && (
-              <div className="mt-8 pt-8 border-t border-slate-700">
-                <h3 className="text-xl font-bold text-white mb-4">Realizar Pago</h3>
-                <p className="text-gray-400 mb-4">
-                  Pedido <span className="font-semibold text-primary">#{numeroPedido}</span> creado exitosamente.
-                  Completa el pago para confirmar tu pedido.
-                </p>
-                <MercadoPagoBrick
-                  amount={total}
-                  externalReference={String(confirmedOrderId)}
-                  onPaymentComplete={handlePaymentComplete}
-                  onPaymentError={handlePaymentError}
-                />
-              </div>
-            )}
           </div>
 
           {/* Resumen del pedido */}
@@ -324,8 +502,8 @@ export default function CheckoutPage() {
 
               <div className="mt-6 p-4 bg-slate-700 rounded-lg">
                 <p className="text-sm text-gray-300">
-                  {metodoPago === 'mercadopago' 
-                    ? '💳 Podrás pagar de forma segura con Mercado Pago después de confirmar tus datos.'
+                  {pasarelaElegida
+                    ? `💳 Al confirmar te llevaremos a ${pasarelaElegida.nombre_visible} para pagar de forma segura.`
                     : '📞 Recibirás un número de pedido y te contactaremos para coordinar pago y entrega.'}
                 </p>
               </div>

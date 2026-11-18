@@ -37,9 +37,39 @@ Las funciones de conexión y los *schemas* de datos deben estar centralizados en
 | Funcionalidad | Método | Endpoint (Backend) | Propósito en Landing |
 | :--- | :--- | :--- | :--- |
 | **Catálogo** | `GET` | `/api/productos/catalogo` | Listado de productos con precios, stock y puntos de fidelización del local WEB. |
-| **Crear Pedido** | `POST` | `/api/pedidos/` | Crear pedido desde el checkout con datos del cliente y cálculo de puntos. |
+| **Validar correo** | `POST` | `/api/pedidos/validar-email` | Formato, dominio con MX y sugerencia de typo (`{valido, email, error, sugerencia}`). |
+| **Enviar código** | `POST` | `/api/pedidos/verificacion-email/enviar` | Envía un código de 6 dígitos al correo (vía n8n). 429 si se reenvía antes de 60 s. |
+| **Confirmar código** | `POST` | `/api/pedidos/verificacion-email/confirmar` | Devuelve `token` (30 días), que se guarda en `localStorage` (`fme_email_verificado`). |
+| **Crear Pedido** | `POST` | `/api/pedidos/` | Crear pedido desde el checkout. **Exige `email_token`**. Devuelve `token_seguimiento`. |
+| **Pasarelas disponibles** | `GET` | `/api/pagos/opciones` | Pasarelas activas del tenant (`id`, `nombre_visible`, `proveedor`, `monto_minimo`). |
+| **Iniciar pago** | `POST` | `/api/pagos` | `{pedido_id, token_seguimiento, pasarela_id, email}` → redirección al proveedor. El monto lo fija el backend. |
+| **Estado del pago** | `GET` / `POST` | `/api/pagos/{id}` y `/api/pagos/{id}/consultar` | Pantalla de resultado: consulta cada 3 s y pide consultar al proveedor cada 15 s. |
+| **Pago simulado** | `POST` | `/api/pagos/{id}/simulada` | Solo desarrollo (`/checkout/simulada`). |
 
-**Nota:** El endpoint `/api/productos/catalogo` devuelve productos con precios del local WEB (codigo='WEB') y stock total agregado de todos los locales físicos.
+Todas las llamadas envían `X-Forwarded-Host: window.location.host`, que el backend usa para identificar el tenant.
+
+**Nota:** El endpoint `/api/productos/catalogo` devuelve productos con precios del local WEB (codigo='WEB') y stock total agregado de todos los locales físicos. Ojo: el pedido pagado en línea se despacha y descuenta desde **un** local (el de despacho por defecto del tipo de pedido), así que puede faltar stock aunque la tienda muestre disponible. Está pendiente la tarea 4.5 del change `add-pasarelas-pago`.
+
+### 2.4. Checkout y pagos en línea (desde 2026-11-18)
+
+Guía completa: `fme-backend/docs/PASARELAS_PAGO.md`. Especificación: change OpenSpec `add-pasarelas-pago` en fme-backend (capabilities `pasarelas-pago` y `checkout-correo`).
+
+1. **Correo** (`app/checkout/page.tsx`):
+   - al salir del campo se valida; si hay sugerencia de typo, el cliente debe corregirla o confirmarla;
+   - luego verifica su correo con el código de 6 dígitos;
+   - si en ese navegador ya hay un token vigente para ese correo, no se pide de nuevo.
+2. **Medio de pago:** el checkout lista las pasarelas de `/api/pagos/opciones` (la primera aparece como "Recomendado") más "Solicitar pedido sin pagar ahora" (coordinado).
+3. **Al confirmar:**
+   - crea el pedido;
+   - con pasarela: `POST /api/pagos` y redirección (`redirigirAPasarela`: GET, o un formulario POST oculto);
+   - si el pago no se puede iniciar, el pedido queda como "coordinar pago".
+4. **Vuelta del proveedor:** el backend redirige a `/checkout/resultado?pago=<id>`, que muestra aprobado, rechazado, en revisión, expirado o en proceso (con "Consultar de nuevo" y "Volver a intentar el pago").
+5. Ya no existe el Payment Brick de Mercado Pago (`MercadoPagoBrick.tsx` se eliminó). `NEXT_PUBLIC_MP_PUBLIC_KEY` y `@mercadopago/sdk-react` quedaron sin uso (pendiente de limpieza).
+
+**Probar en local:**
+- abrir `http://masasestacion.local:<puerto>`, no `localhost`;
+- el código de verificación aparece en `docker logs fme-backend` (solo en desarrollo);
+- la pasarela "Simulada" se crea en el backoffice.
 
 ### 2.3. Directrices de Carga de Datos
 

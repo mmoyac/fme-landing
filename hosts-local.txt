@@ -4,6 +4,7 @@
 
 127.0.0.1 masasestacion.local
 127.0.0.1 elolivo.local
+127.0.0.1 elquincho.local
 127.0.0.1 api.masasestacion.local
 127.0.0.1 admin.masasestacion.local
 
