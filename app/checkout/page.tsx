@@ -5,11 +5,18 @@ import { useEffect, useState, FormEvent } from 'react';
 import { useCart } from '@/context/CartContext';
 import {
   crearPedido, validarEmail, ValidacionEmail, tokenGuardado, enviarCodigoEmail, confirmarCodigoEmail,
+  obtenerOpcionesEntrega, costoDeliveryEstimado, OpcionesEntrega, ModalidadEntrega,
 } from '@/lib/api/pedidos';
 import { obtenerPasarelas, iniciarPago, redirigirAPasarela, PasarelaDisponible } from '@/lib/api/pagos';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import DireccionMapbox, { DireccionElegida } from '@/components/DireccionMapbox';
+
+/** 'Ñuñoa ' y 'nunoa' son la misma comuna (misma regla que el backend). */
+function normalizarComuna(nombre: string | null | undefined): string {
+  return (nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
+}
 
 const ICONO_PROVEEDOR: Record<string, string> = { MERCADOPAGO: '💳', FLOW: '💳', KHIPU: '🏦', SIMULADA: '🧪' };
 const DETALLE_PROVEEDOR: Record<string, string> = {
@@ -36,6 +43,24 @@ export default function CheckoutPage() {
     comuna: '',
     notas: ''
   });
+  // Entrega (add-delivery-por-comuna): retiro en casa central o delivery a una comuna con tarifa
+  const [opcionesEntrega, setOpcionesEntrega] = useState<OpcionesEntrega>({
+    retiro: { direccion: null }, tarifas: [], monto_minimo_gratis: null,
+  });
+  const [modalidad, setModalidad] = useState<ModalidadEntrega | null>(null);
+  const [confirmaComuna, setConfirmaComuna] = useState(false);
+  // Dirección elegida de las sugerencias de Mapbox y con comuna con tarifa: no requiere confirmación manual
+  const [direccionVerificada, setDireccionVerificada] = useState(false);
+  const [avisoDireccion, setAvisoDireccion] = useState<string | null>(null);
+
+  function elegirDireccion(d: DireccionElegida) {
+    const tarifa = opcionesEntrega.tarifas.find(t => normalizarComuna(t.comuna) === normalizarComuna(d.comuna));
+    setFormData(f => ({ ...f, direccion_entrega: d.direccion, comuna: tarifa ? tarifa.comuna : '' }));
+    setConfirmaComuna(false);
+    setDireccionVerificada(!!tarifa);
+    setAvisoDireccion(tarifa || !d.comuna ? null
+      : `Esa dirección está en ${d.comuna} y no tenemos delivery ahí. Puedes elegir retiro en casa central.`);
+  }
 
   // Validación del correo (formato, dominio que recibe correo y sugerencia de typo)
   const [chequeoEmail, setChequeoEmail] = useState<ValidacionEmail | null>(null);
@@ -107,6 +132,20 @@ export default function CheckoutPage() {
 
   const total = cart.reduce((sum, item) => sum + item.precio * item.cantidad, 0);
   const pasarelaElegida = pasarelas.find(p => p.id === metodoPago);
+  const hayDelivery = opcionesEntrega.tarifas.length > 0;
+  const costoDelivery = modalidad ? costoDeliveryEstimado(opcionesEntrega, modalidad, formData.comuna, total) : 0;
+  const totalPagar = total + costoDelivery;
+  const tarifaElegida = opcionesEntrega.tarifas.find(t => t.comuna === formData.comuna);
+  const minimoGratis = opcionesEntrega.monto_minimo_gratis;
+  const faltaParaGratis = modalidad === 'DESPACHO' && tarifaElegida && minimoGratis && total < minimoGratis
+    ? minimoGratis - total : 0;
+
+  useEffect(() => {
+    obtenerOpcionesEntrega().then(op => {
+      setOpcionesEntrega(op);
+      if (op.tarifas.length === 0) setModalidad('RETIRO');
+    });
+  }, []);
 
   useEffect(() => {
     obtenerPasarelas().then(lista => {
@@ -133,7 +172,19 @@ export default function CheckoutPage() {
       setError('Verifica tu correo con el código que te enviamos antes de confirmar el pedido.');
       return;
     }
-    if (pasarelaElegida?.monto_minimo && total < pasarelaElegida.monto_minimo) {
+    if (!modalidad) {
+      setError('Elige si retiras en la casa central o quieres delivery.');
+      return;
+    }
+    if (modalidad === 'DESPACHO' && (!tarifaElegida || formData.direccion_entrega.trim().length < 5)) {
+      setError('Para delivery ingresa tu dirección y elige tu comuna.');
+      return;
+    }
+    if (modalidad === 'DESPACHO' && !direccionVerificada && !confirmaComuna) {
+      setError(`Confirma que tu dirección está en ${formData.comuna}.`);
+      return;
+    }
+    if (pasarelaElegida?.monto_minimo && totalPagar < pasarelaElegida.monto_minimo) {
       setError(`El monto mínimo para pagar con ${pasarelaElegida.nombre_visible} es $${pasarelaElegida.monto_minimo.toLocaleString('es-CL')}`);
       return;
     }
@@ -141,8 +192,13 @@ export default function CheckoutPage() {
 
     let confirmacion;
     try {
+      const esDelivery = modalidad === 'DESPACHO';
       confirmacion = await crearPedido({
         ...formData,
+        modalidad_entrega: modalidad,
+        direccion_entrega: esDelivery ? formData.direccion_entrega : undefined,
+        comuna: esDelivery ? formData.comuna : undefined,
+        confirma_comuna: esDelivery ? confirmaComuna : undefined,
         email_token: token,
         items: cart.map(item => ({ sku: item.sku, cantidad: item.cantidad })),
       });
@@ -364,31 +420,109 @@ export default function CheckoutPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Dirección de Entrega *
+              {/* Entrega (add-delivery-por-comuna) */}
+              <div className="border-t border-slate-700 pt-6">
+                <label className="block text-lg font-semibold text-white mb-4">
+                  ¿Cómo quieres recibir tu pedido?
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.direccion_entrega}
-                  onChange={(e) => setFormData({ ...formData, direccion_entrega: e.target.value })}
-                  placeholder="Calle, Número, Depto/Casa"
-                  className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:border-primary focus:outline-none"
-                />
-              </div>
+                <div className="space-y-3">
+                  <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors bg-slate-700 ${modalidad === 'RETIRO' ? 'border-primary' : 'border-slate-600 hover:border-primary'}`}>
+                    <input
+                      type="radio"
+                      name="modalidad"
+                      checked={modalidad === 'RETIRO'}
+                      onChange={() => setModalidad('RETIRO')}
+                      className="mt-1 mr-3 text-primary focus:ring-primary"
+                    />
+                    <div className="flex-1">
+                      <div className="font-semibold text-white flex flex-wrap items-center gap-2">
+                        🏪 Retiro en casa central
+                        <span className="text-xs bg-green-600 text-white px-2 py-1 rounded">Sin costo</span>
+                      </div>
+                      <p className="text-sm text-gray-400 mt-1">
+                        {opcionesEntrega.retiro.direccion
+                          ? <>Retiras tu pedido en <strong className="text-gray-300">{opcionesEntrega.retiro.direccion}</strong>. Te avisaremos cuando esté listo.</>
+                          : 'Retiras tu pedido en nuestra casa central. Te avisaremos cuando esté listo.'}
+                      </p>
+                    </div>
+                  </label>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Comuna
-                </label>
-                <input
-                  type="text"
-                  value={formData.comuna}
-                  onChange={(e) => setFormData({ ...formData, comuna: e.target.value })}
-                  placeholder="Ej: Santiago Centro"
-                  className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:border-primary focus:outline-none"
-                />
+                  {hayDelivery && (
+                    <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors bg-slate-700 ${modalidad === 'DESPACHO' ? 'border-primary' : 'border-slate-600 hover:border-primary'}`}>
+                      <input
+                        type="radio"
+                        name="modalidad"
+                        checked={modalidad === 'DESPACHO'}
+                        onChange={() => setModalidad('DESPACHO')}
+                        className="mt-1 mr-3 text-primary focus:ring-primary"
+                      />
+                      <div className="flex-1">
+                        <div className="font-semibold text-white">🚚 Delivery a domicilio</div>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Te lo llevamos. El costo depende de tu comuna
+                          {minimoGratis ? ` (gratis en compras desde $${minimoGratis.toLocaleString('es-CL')})` : ''}.
+                        </p>
+                      </div>
+                    </label>
+                  )}
+                </div>
+
+                {modalidad === 'DESPACHO' && (
+                  <div className="mt-4 space-y-4">
+                    <DireccionMapbox
+                      valor={formData.direccion_entrega}
+                      etiqueta={formData.comuna ? `Dirección en ${formData.comuna} *` : 'Dirección de entrega *'}
+                      onEscribir={(texto) => {
+                        setFormData(f => ({ ...f, direccion_entrega: texto }));
+                        setDireccionVerificada(false);
+                        setAvisoDireccion(null);
+                      }}
+                      onElegir={elegirDireccion}
+                    />
+                    {direccionVerificada && (
+                      <p className="text-sm text-green-400">✓ Dirección encontrada en {formData.comuna}.</p>
+                    )}
+                    {avisoDireccion && <p className="text-sm text-amber-300">{avisoDireccion}</p>}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Comuna *
+                      </label>
+                      <select
+                        required
+                        value={formData.comuna}
+                        onChange={(e) => {
+                          setFormData({ ...formData, comuna: e.target.value });
+                          setConfirmaComuna(false);
+                          setDireccionVerificada(false);
+                        }}
+                        className="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:border-primary focus:outline-none"
+                      >
+                        <option value="">Elige tu comuna…</option>
+                        {opcionesEntrega.tarifas.map(t => (
+                          <option key={t.comuna} value={t.comuna}>
+                            {t.comuna} — ${t.costo.toLocaleString('es-CL')}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">¿No está tu comuna? Elige retiro en casa central o escríbenos.</p>
+                    </div>
+                    {formData.comuna && !direccionVerificada && (
+                      <label className="flex items-start gap-3 p-3 rounded-lg bg-amber-900/20 border border-amber-700/50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          required
+                          checked={confirmaComuna}
+                          onChange={(e) => setConfirmaComuna(e.target.checked)}
+                          className="mt-1 text-primary focus:ring-primary"
+                        />
+                        <span className="text-sm text-amber-100">
+                          No encontramos tu dirección en el mapa. Confirmo que está en <strong>{formData.comuna}</strong>.
+                          Si no corresponde, el pedido puede reprogramarse o cobrarse la diferencia del delivery.
+                        </span>
+                      </label>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -428,7 +562,7 @@ export default function CheckoutPage() {
                         <p className="text-sm text-gray-400 mt-1">
                           {DETALLE_PROVEEDOR[p.proveedor] || 'Pago en línea seguro.'} Serás redirigido para completar el pago.
                         </p>
-                        {p.monto_minimo && total < p.monto_minimo && (
+                        {p.monto_minimo && totalPagar < p.monto_minimo && (
                           <p className="text-xs text-amber-400 mt-1">Monto mínimo ${p.monto_minimo.toLocaleString('es-CL')}</p>
                         )}
                       </div>
@@ -449,7 +583,7 @@ export default function CheckoutPage() {
                         📞 Solicitar pedido sin pagar ahora
                       </div>
                       <p className="text-sm text-gray-400 mt-1">
-                        Recibirás tu número de pedido y te contactaremos para coordinar pago y entrega.
+                        Recibirás tu número de pedido y te contactaremos para coordinar el pago y la {modalidad === 'RETIRO' ? 'fecha de retiro' : 'entrega'}.
                       </p>
                     </div>
                   </label>
@@ -493,10 +627,32 @@ export default function CheckoutPage() {
                 ))}
               </div>
 
-              <div className="border-t border-slate-700 pt-4">
-                <div className="flex justify-between items-center text-2xl font-bold">
+              <div className="border-t border-slate-700 pt-4 space-y-2">
+                <div className="flex justify-between items-center text-gray-300">
+                  <span>Productos</span>
+                  <span>${total.toLocaleString('es-CL')}</span>
+                </div>
+                <div className="flex justify-between items-center text-gray-300">
+                  <span>
+                    {modalidad === 'RETIRO' ? 'Retiro en casa central'
+                      : modalidad === 'DESPACHO' ? `Delivery${tarifaElegida ? ` a ${tarifaElegida.comuna}` : ''}`
+                        : 'Entrega'}
+                  </span>
+                  <span>
+                    {modalidad === 'RETIRO' ? 'Gratis'
+                      : modalidad === 'DESPACHO' && tarifaElegida
+                        ? (costoDelivery === 0 ? 'Gratis' : `$${costoDelivery.toLocaleString('es-CL')}`)
+                        : '—'}
+                  </span>
+                </div>
+                {faltaParaGratis > 0 && (
+                  <p className="text-xs text-amber-300">
+                    Agrega ${faltaParaGratis.toLocaleString('es-CL')} más y el delivery es gratis.
+                  </p>
+                )}
+                <div className="flex justify-between items-center text-2xl font-bold pt-2">
                   <span className="text-white">Total</span>
-                  <span className="text-primary">${total.toLocaleString('es-CL')}</span>
+                  <span className="text-primary">${totalPagar.toLocaleString('es-CL')}</span>
                 </div>
               </div>
 
@@ -504,7 +660,7 @@ export default function CheckoutPage() {
                 <p className="text-sm text-gray-300">
                   {pasarelaElegida
                     ? `💳 Al confirmar te llevaremos a ${pasarelaElegida.nombre_visible} para pagar de forma segura.`
-                    : '📞 Recibirás un número de pedido y te contactaremos para coordinar pago y entrega.'}
+                    : `📞 Recibirás un número de pedido y te contactaremos para coordinar el pago y la ${modalidad === 'RETIRO' ? 'fecha de retiro' : 'entrega'}.`}
                 </p>
               </div>
             </div>

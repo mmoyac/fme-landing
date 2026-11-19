@@ -51,8 +51,28 @@ export interface EstadoPago {
   simulada: boolean;
 }
 
+// Modo demo (change add-delivery-por-comuna): `?demo=<clave>` en cualquier página deja la clave en la pestaña
+// (sessionStorage) y se envía al backend, que con PASARELAS_CLAVE_DEMO muestra también las pasarelas de Integración.
+const CLAVE_DEMO = 'fme_demo_pagos';
+
+export function capturarClaveDemo(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const clave = new URLSearchParams(window.location.search).get('demo');
+    if (clave) sessionStorage.setItem(CLAVE_DEMO, clave.slice(0, 200));
+  } catch { /* almacenamiento bloqueado: sin modo demo */ }
+}
+
+function claveDemo(): string | null {
+  if (typeof window === 'undefined') return null;
+  capturarClaveDemo();
+  try { return sessionStorage.getItem(CLAVE_DEMO); } catch { return null; }
+}
+
 export async function obtenerPasarelas(): Promise<PasarelaDisponible[]> {
-  const response = await fetch(`${API_URL}/api/pagos/opciones`, { headers: headers(), cache: 'no-store' });
+  const demo = claveDemo();
+  const query = demo ? `?demo=${encodeURIComponent(demo)}` : '';
+  const response = await fetch(`${API_URL}/api/pagos/opciones${query}`, { headers: headers(), cache: 'no-store' });
   if (!response.ok) return [];
   const data = await response.json();
   return data.pasarelas || [];
@@ -67,7 +87,7 @@ export async function iniciarPago(datos: {
   const response = await fetch(`${API_URL}/api/pagos`, {
     method: 'POST',
     headers: headers(),
-    body: JSON.stringify(datos),
+    body: JSON.stringify({ ...datos, demo: claveDemo() || undefined }),
   });
   if (!response.ok) return leerError(response, 'No se pudo iniciar el pago');
   return response.json();

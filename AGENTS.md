@@ -58,6 +58,11 @@ Guía completa: `fme-backend/docs/PASARELAS_PAGO.md`. Especificación: change Op
    - al salir del campo se valida; si hay sugerencia de typo, el cliente debe corregirla o confirmarla;
    - luego verifica su correo con el código de 6 dígitos;
    - si en ese navegador ya hay un token vigente para ese correo, no se pide de nuevo.
+1.5. **Entrega** (change `add-delivery-por-comuna`, opciones de `GET /api/tienda/entrega`):
+   - **Retiro en casa central** (muestra la dirección de la config. de la landing, delivery $0) o **Delivery** (dirección + comuna de una lista con su costo);
+   - el resumen muestra la línea Delivery y el total; el pedido envía `modalidad_entrega` y `comuna`, y el **backend recalcula** el costo;
+   - el pago en línea cobra productos + delivery; sin tarifas activas solo se ofrece Retiro;
+   - la dirección se autocompleta con Mapbox (`components/DireccionMapbox.tsx`, `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN`) y la comuna sale de la sugerencia; si el cliente escribe a mano, debe confirmar la comuna con una casilla (`confirma_comuna`).
 2. **Medio de pago:** el checkout lista las pasarelas de `/api/pagos/opciones` (la primera aparece como "Recomendado") más "Solicitar pedido sin pagar ahora" (coordinado).
 3. **Al confirmar:**
    - crea el pedido;
@@ -65,6 +70,8 @@ Guía completa: `fme-backend/docs/PASARELAS_PAGO.md`. Especificación: change Op
    - si el pago no se puede iniciar, el pedido queda como "coordinar pago".
 4. **Vuelta del proveedor:** el backend redirige a `/checkout/resultado?pago=<id>`, que muestra aprobado, rechazado, en revisión, expirado o en proceso (con "Consultar de nuevo" y "Volver a intentar el pago").
 5. Ya no existe el Payment Brick de Mercado Pago (`MercadoPagoBrick.tsx` se eliminó). `NEXT_PUBLIC_MP_PUBLIC_KEY` y `@mercadopago/sdk-react` quedaron sin uso (pendiente de limpieza).
+
+**Modo demo** (`lib/api/pagos.ts`): si la URL trae `?demo=<clave>`, la clave se guarda en `sessionStorage` y se envía en `/api/pagos/opciones` y `POST /api/pagos`; con `PASARELAS_CLAVE_DEMO` en el backend, eso muestra las pasarelas de Integración en producción (ver `PASARELAS_PAGO.md`).
 
 **Probar en local:**
 - abrir `http://masasestacion.local:<puerto>`, no `localhost`;

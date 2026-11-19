@@ -12,8 +12,11 @@ export interface PedidoCreate {
   cliente_apellido?: string;
   cliente_email: string;
   cliente_telefono: string;
-  direccion_entrega: string;
+  // Entrega (add-delivery-por-comuna): el costo de delivery lo calcula el backend desde las tarifas
+  modalidad_entrega: ModalidadEntrega;
+  direccion_entrega?: string;
   comuna?: string;
+  confirma_comuna?: boolean;  // con DESPACHO: el cliente confirma que su dirección está en la comuna
   notas?: string;
   email_token?: string;  // correo verificado con código
   items: ItemPedido[];
@@ -26,6 +29,47 @@ export interface PedidoConfirmacion {
   estado: string;
   mensaje: string;
   token_seguimiento?: string;  // credencial para iniciar el pago en línea
+  modalidad_entrega?: ModalidadEntrega;
+  comuna_entrega?: string | null;
+  costo_delivery?: number | null;  // total a pagar = monto_total + costo_delivery
+}
+
+export type ModalidadEntrega = 'RETIRO' | 'DESPACHO';
+
+export interface TarifaDelivery {
+  comuna: string;
+  costo: number;
+}
+
+export interface OpcionesEntrega {
+  retiro: { direccion: string | null };
+  tarifas: TarifaDelivery[];
+  monto_minimo_gratis: number | null;
+}
+
+/** Opciones de entrega del checkout: dirección de retiro, comunas con delivery y monto para envío gratis. */
+export async function obtenerOpcionesEntrega(): Promise<OpcionesEntrega> {
+  const vacio: OpcionesEntrega = { retiro: { direccion: null }, tarifas: [], monto_minimo_gratis: null };
+  try {
+    const response = await fetch(`${API_URL}/api/tienda/entrega`, {
+      headers: { 'X-Forwarded-Host': hostFrontend() },
+      cache: 'no-store',
+    });
+    if (!response.ok) return vacio;
+    return await response.json();
+  } catch {
+    return vacio;
+  }
+}
+
+/** Costo de delivery que mostrará el checkout (el backend lo recalcula al crear el pedido). */
+export function costoDeliveryEstimado(opciones: OpcionesEntrega, modalidad: ModalidadEntrega, comuna: string,
+                                      montoProductos: number): number {
+  if (modalidad !== 'DESPACHO') return 0;
+  const tarifa = opciones.tarifas.find(t => t.comuna === comuna);
+  if (!tarifa) return 0;
+  if (opciones.monto_minimo_gratis && montoProductos >= opciones.monto_minimo_gratis) return 0;
+  return tarifa.costo;
 }
 
 export interface ValidacionEmail {

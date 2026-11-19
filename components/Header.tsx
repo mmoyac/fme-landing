@@ -1,14 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useCart } from '@/context/CartContext'
 import { useTenantConfig } from '@/context/TenantConfigContext'
 import CartSidebar from './CartSidebar'
+import { capturarClaveDemo } from '@/lib/api/pagos'
 
 export default function Header() {
   const [isCartOpen, setIsCartOpen] = useState(false)
+  // Modo demo de pagos: guarda ?demo=<clave> en la pestaña antes de navegar al checkout
+  useEffect(() => { capturarClaveDemo() }, [])
   const { getTotalItems } = useCart()
   const { config, loading, error } = useTenantConfig()
 
