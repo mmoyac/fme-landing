@@ -45,6 +45,8 @@ export interface OpcionesEntrega {
   retiro: { direccion: string | null };
   tarifas: TarifaDelivery[];
   monto_minimo_gratis: number | null;
+  /** false = el checkout no ofrece "Solicitar pedido sin pagar ahora" (por omisión true) */
+  permite_pedido_sin_pago?: boolean;
 }
 
 /** Opciones de entrega del checkout: dirección de retiro, comunas con delivery y monto para envío gratis. */

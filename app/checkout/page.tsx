@@ -133,6 +133,9 @@ export default function CheckoutPage() {
   const total = cart.reduce((sum, item) => sum + item.precio * item.cantidad, 0);
   const pasarelaElegida = pasarelas.find(p => p.id === metodoPago);
   const hayDelivery = opcionesEntrega.tarifas.length > 0;
+  // Interruptor por tenant: si está apagado, solo se puede pedir pagando en línea
+  const permiteSinPago = opcionesEntrega.permite_pedido_sin_pago !== false;
+  const sinMedioDePago = !permiteSinPago && pasarelas.length === 0;
   const costoDelivery = modalidad ? costoDeliveryEstimado(opcionesEntrega, modalidad, formData.comuna, total) : 0;
   const totalPagar = total + costoDelivery;
   const tarifaElegida = opcionesEntrega.tarifas.find(t => t.comuna === formData.comuna);
@@ -182,6 +185,10 @@ export default function CheckoutPage() {
     }
     if (modalidad === 'DESPACHO' && !direccionVerificada && !confirmaComuna) {
       setError(`Confirma que tu dirección está en ${formData.comuna}.`);
+      return;
+    }
+    if (!pasarelaElegida && !permiteSinPago) {
+      setError('El pago en línea no está disponible en este momento. Contáctanos para hacer tu pedido.');
       return;
     }
     if (pasarelaElegida?.monto_minimo && totalPagar < pasarelaElegida.monto_minimo) {
@@ -569,6 +576,13 @@ export default function CheckoutPage() {
                     </label>
                   ))}
 
+                  {sinMedioDePago && (
+                    <div className="p-4 rounded-lg bg-amber-900/30 border border-amber-700 text-amber-200 text-sm">
+                      El pago en línea no está disponible en este momento. Contáctanos para hacer tu pedido.
+                    </div>
+                  )}
+
+                  {permiteSinPago && (
                   <label className="flex items-start p-4 border-2 border-slate-600 rounded-lg cursor-pointer hover:border-primary transition-colors bg-slate-700">
                     <input
                       type="radio"
@@ -587,6 +601,7 @@ export default function CheckoutPage() {
                       </p>
                     </div>
                   </label>
+                  )}
                 </div>
               </div>
 
@@ -598,7 +613,7 @@ export default function CheckoutPage() {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || sinMedioDePago}
                 className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-4 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
               >
                 {loading ? 'Procesando...' : pasarelaElegida ? `Confirmar y pagar con ${pasarelaElegida.nombre_visible}` : 'Enviar Pedido'}
@@ -660,6 +675,8 @@ export default function CheckoutPage() {
                 <p className="text-sm text-gray-300">
                   {pasarelaElegida
                     ? `💳 Al confirmar te llevaremos a ${pasarelaElegida.nombre_visible} para pagar de forma segura.`
+                    : sinMedioDePago
+                    ? '⚠️ El pago en línea no está disponible en este momento. Contáctanos para hacer tu pedido.'
                     : `📞 Recibirás un número de pedido y te contactaremos para coordinar el pago y la ${modalidad === 'RETIRO' ? 'fecha de retiro' : 'entrega'}.`}
                 </p>
               </div>
